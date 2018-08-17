@@ -35,9 +35,22 @@ module Peatio::Command::Service
 
       def execute
         EM.run {
-          orderbooks = ::Peatio::Upstream::Binance.run!(
+          orderbooks, trader = ::Peatio::Upstream::Binance.run!(
             markets: market_list,
           )
+
+          trade = trader.submit_order(timeout: 10, order: {
+                                        symbol: "ETHBTC",
+                                        type: "LIMIT",
+                                        side: "BUY",
+                                        quantity: 100,
+                                        price: 0.4597,
+                                      })
+
+          trade.on :error do |request|
+            puts request.response
+            puts request.response_header.status
+          end
 
           logger = Peatio::Upstream::Binance.logger
 

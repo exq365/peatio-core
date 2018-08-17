@@ -29,7 +29,7 @@ class Peatio::Upstream::Binance::Client
       get(query: {'symbol': symbol.upcase, 'limit': limit})
   end
 
-  def self.sign!(data)
+  def sign!(data)
     OpenSSL::HMAC.hexdigest(
       OpenSSL::Digest.new("sha256"),
       @config[:secret_key],
@@ -37,10 +37,12 @@ class Peatio::Upstream::Binance::Client
     )
   end
 
-  def submit_order(symbol, side, type, quantity, price = nil)
+  def submit_order(symbol:, side:, type:, quantity:, price: nil)
     raise "Invalid order: unexpected order side: #{side}" unless ["BUY", "SELL"].include?(side)
     raise "Invalid order: unexpected order type: #{type}" unless ["LIMIT", "MARKET"].include?(type)
     raise "Invalid order: price is not specified for LIMIT order" if price.nil? and type == "LIMIT"
+
+    timeInForce = "GTC"
 
     query = []
     query << ["symbol", symbol]
@@ -54,15 +56,19 @@ class Peatio::Upstream::Binance::Client
       query << ["price", price]
     end
 
-    query << ["timestamp", Time.now.to_i]
+    query << ["timestamp", Time.now.to_i * 1000]
 
     # we can specify our own unique order id
     #query << ["newClientOrderId", ""]
 
-    signature = self.sign!(URI.encode_www_form(query))
+    signature = sign!(URI.encode_www_form(query))
 
     query << ["signature", signature]
 
     header = {'X-MBX-APIKEY': @config[:api_key]}
+
+    uri = URI::encode_www_form(query)
+
+    EM::HttpRequest.new(@config[:uri_rest] + "/api/v3/order?" + uri).post(head: header)
   end
 end

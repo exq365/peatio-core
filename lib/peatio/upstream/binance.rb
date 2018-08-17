@@ -16,6 +16,7 @@ require "pp"
 module Peatio::Upstream::Binance
   require_relative "binance/orderbook"
   require_relative "binance/client"
+  require_relative "binance/trader"
 
   def self.logger
     logger = Peatio::Logger.logger
@@ -30,9 +31,12 @@ module Peatio::Upstream::Binance
       orderbooks[symbol] = Orderbook.new
     end
 
-    streams = markets.product(["depth", "trade"]).map { |e| e.join("@") }.join("/")
+    streams = markets.product(["depth", "trade"])
+      .map { |e| e.join("@") }.join("/")
 
     client = Client.new
+    trader = Trader.new(client)
+
     client.stream_connect! streams
 
     client.stream.on :open do |event|
@@ -53,7 +57,7 @@ module Peatio::Upstream::Binance
       when "depth"
         process_depth_diff(data, symbol, orderbooks)
       when "trade"
-        process_trades(data, symbol)
+        process_trades(data, symbol, trader)
       end
     end
 
@@ -61,17 +65,19 @@ module Peatio::Upstream::Binance
       logger.error(message)
     end
 
-    return orderbooks
+    return orderbooks, trader
   end
 
   private
 
-  def self.process_trades(data, symbol)
+  def self.process_trades(data, symbol, trader)
     id, price, amount = data["t"], data["p"], data["q"]
     buyer, seller = data["b"], data["a"]
     logger.debug "[#{symbol}] ##{id} trade event: " \
                  "amount=#{amount} price=#{price} " \
                  "seller=#{seller} buyer=#{buyer}"
+
+    trader.process(buyer, seller, price, amount)
   end
 
   def self.process_depth_diff(data, symbol, orderbooks)
