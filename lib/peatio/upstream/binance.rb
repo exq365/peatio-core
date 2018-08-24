@@ -45,6 +45,8 @@ module Peatio::Upstream::Binance
       markets.each do |symbol|
         load_orderbook(client, symbol, orderbooks[symbol])
       end
+
+      trader.emit(:ready)
     end
 
     client.stream.on :message do |message|

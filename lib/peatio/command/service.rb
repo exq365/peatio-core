@@ -39,17 +39,21 @@ module Peatio::Command::Service
             markets: market_list,
           )
 
-          trade = trader.submit_order(timeout: 10, order: {
-                                        symbol: "ETHBTC",
-                                        type: "LIMIT",
-                                        side: "BUY",
-                                        quantity: 100,
-                                        price: 0.4597,
-                                      })
+          trade = trader.order(timeout: 10, order: {
+                                 symbol: "TUSDBTC",
+                                 type: "LIMIT",
+                                 side: "BUY",
+                                 quantity: 10.0,
+                                 price: 0.0001,
+                               })
 
           trade.on :error do |request|
             puts request.response
             puts request.response_header.status
+          end
+
+          trade.on :submit do |id|
+            puts id
           end
 
           logger = Peatio::Upstream::Binance.logger

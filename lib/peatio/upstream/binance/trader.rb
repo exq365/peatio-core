@@ -1,39 +1,49 @@
 module Peatio::Upstream::Binance
-  class Trader
+  class Trader < Peatio::Wire
+    class Trade < Peatio::Wire
+    end
+
+    def on(message, &block)
+      super(message, &block)
+    end
+
     def logger
       Peatio::Upstream::Binance.logger
     end
 
     def initialize(client)
       @client = client
-    end
-
-    class Trade
-      def initialize
-        @callbacks = {}
-      end
-
-      def emit(message, *args)
-        @callbacks[message].yield(*args) unless @callbacks[message].nil?
-      end
-
-      def on(message, &block)
-        @callbacks[message] = block
-      end
+      @ready = false
     end
 
     def process(buyer, seller, price, amount)
     end
 
-    def submit_order(timeout:, order:)
-      logger.info "submitting new order: [#{order[:symbol].downcase}] " \
-                  "#{order[:type]} #{order[:side]} " \
-                  "amount=#{order[:quantity]} price=#{order[:price]}"
+    def order(timeout:, order:)
       trade = Trade.new
 
+      if @ready
+        submit_order(timeout, order, trade)
+      else
+        on(:ready) {
+          submit_order(timeout, order, trade)
+        }
+      end
+
+      trade
+    end
+
+    private
+
+    def submit_order(timeout, order, trade)
+      logger.info "[#{order[:symbol].downcase}] submitting new order: " \
+                  "#{order[:type]} #{order[:side]} " \
+                  "amount=#{order[:quantity]} price=#{order[:price]}"
+
       request = @client.submit_order(order)
+
       request.errback {
-        trade.emit(:error, request) unless trade.nil?
+        trade.emit(:error, request)
       }
 
       request.callback {
@@ -42,7 +52,13 @@ module Peatio::Upstream::Binance
         else
           payload = JSON.parse(request.response)
 
-          trade.emit(:submit, payload["orderId"])
+          id = payload["orderId"]
+
+          logger.info "[#{order[:symbol].downcase}] ##{id} order submitted: " \
+                      "#{order[:type]} #{order[:side]} " \
+                      "amount=#{order[:quantity]} price=#{order[:price]}"
+
+          trade.emit(:submit, id)
         end
       }
 
