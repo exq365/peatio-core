@@ -54,7 +54,7 @@ module Peatio::Auth
       @private_key = private_key
 
       @verify_options = {
-        verify_expiration: true,
+        verify_expiration: false,
         verify_not_before: true,
         iss: ENV["JWT_ISSUER"],
         verify_iss: !ENV["JWT_ISSUER"].nil?,
