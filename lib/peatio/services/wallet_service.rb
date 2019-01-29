@@ -52,8 +52,7 @@ module Peatio
         currency = deposit.currency
         destination_wallets(deposit).each do |wallet|
           break if left_amount == 0
-          blockchain_client = BlockchainClient[Blockchain.find_by_key(wallet.blockchain_key).key]
-          wallet_balance = blockchain_client.load_balance!(wallet.address, deposit.currency)
+          wallet_balance = WalletService[wallet].load_balance(wallet.address, deposit.currency)
           amount_for_wallet = [wallet.max_balance - wallet_balance, left_amount].min
           # If free amount for current wallet too small we will not able to collect it.
           # So we try to collect it to next wallets.
