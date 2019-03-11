@@ -109,6 +109,11 @@ class Peatio::Upstream::Binance::Client
     ).delete(head: header)
   end
 
+  def kline_data(symbol, period)
+    EM::HttpRequest.new(@config[:uri_rest] + "/api/v1/klines").
+        get(query: {'symbol': symbol.upcase, 'interval': period, 'limit': 1000})
+  end
+
   private
 
   def sign!(query)

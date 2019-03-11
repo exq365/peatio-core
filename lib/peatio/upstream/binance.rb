@@ -22,6 +22,7 @@ class Peatio::Upstream::Binance
   require_relative "binance/orderbook"
   require_relative "binance/client"
   require_relative "binance/trader"
+  require_relative "binance/k_line"
 
   # @return [Client]
   attr_accessor :client
@@ -71,12 +72,14 @@ class Peatio::Upstream::Binance
   # @return [self]
   def start!(markets)
     orderbooks = {}
+    klines = {}
 
     markets.each do |symbol|
       orderbooks[symbol] = Orderbook.new
+      klines[symbol] = KLine.new
     end
 
-    streams = markets.product(["depth"])
+    streams = markets.product(["depth"] + KLine.kline_streams)
       .map { |e| e.join("@") }.join("/")
 
     @stream = @client.connect_public_stream!(streams)
@@ -86,10 +89,15 @@ class Peatio::Upstream::Binance
 
       total = markets.length
       markets.each do |symbol|
+
+        load_kline(symbol, klines[symbol]){
+          emit(:open, orderbooks, klines)
+        }
+
         load_orderbook(symbol, orderbooks[symbol]) {
           total -= 1
           if total == 0
-            emit(:open, orderbooks)
+            emit(:open, orderbooks, klines)
           end
         }
       end
@@ -104,6 +112,10 @@ class Peatio::Upstream::Binance
       case stream
       when "depth"
         process_depth_diff(data, symbol, orderbooks)
+      when -> (s) { s.include?('kline') }
+        period = KLine.non_humanize_period(stream.split("_")[1])
+        emit(:message,
+             process_kline_data(data["k"], symbol, period, klines[symbol]))
       end
     end
 
@@ -154,6 +166,49 @@ class Peatio::Upstream::Binance
         bids,
         orderbook.max_bid,
       ]
+  end
+
+  def process_kline_data(data, symbol, peroid, kline)
+    { symbol: symbol,
+      period: peroid,
+      data: kline.filter(data["t"], data["o"], data["c"], data["h"], data["i"], data["v"])}
+  end
+
+  def load_kline(symbol, kline)
+    KLine::AVAILABLE_POINT_PERIODS.each do |period|
+      request = @client.kline_data(symbol, KLine.humanize_period(period))
+
+      request.errback {
+        logger.fatal "unable to request market kline for %s - %s" % [symbol, KLine.humanize_period(period)]
+
+        emit(:error)
+      }
+
+      request.callback {
+        if request.response_header.status != 200
+          logger.fatal(
+              "unexpected HTTP status code from binance: " \
+          "#{request.response_header.status} #{request.response}"
+          )
+
+          emit(:error)
+
+          next
+        end
+
+        payload = JSON.parse(request.response)
+        data = payload.map{|v| v.first(5)}
+
+        logger.info "[#{symbol}] ##{KLine.humanize_period(period)} kline data loaded: " \
+                  "(#{data.length} data)"
+
+        data.each do |(open_time, open, high, low, close, volume)|
+          kline.add(period, open_time, open, high, low, close, volume)
+        end
+
+        yield if block_given?
+      }
+    end
   end
 
   def load_orderbook(symbol, orderbook)
