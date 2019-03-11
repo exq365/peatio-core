@@ -171,7 +171,7 @@ class Peatio::Upstream::Binance
   def process_kline_data(data, symbol, peroid, kline)
     { symbol: symbol,
       period: peroid,
-      data: kline.filter(data["t"], data["o"], data["c"], data["h"], data["i"], data["v"])}
+      data: kline.filter(data["t"], data["o"], data["h"], data["l"], data["c"], data["v"])}
   end
 
   def load_kline(symbol, kline)
@@ -197,7 +197,7 @@ class Peatio::Upstream::Binance
         end
 
         payload = JSON.parse(request.response)
-        data = payload.map{|v| v.first(5)}
+        data = payload.map{|v| v.first(6)}
 
         logger.info "[#{symbol}] ##{KLine.humanize_period(period)} kline data loaded: " \
                   "(#{data.length} data)"
