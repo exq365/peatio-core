@@ -23,6 +23,7 @@ class Peatio::Upstream::Binance
   require_relative "binance/client"
   require_relative "binance/trader"
   require_relative "binance/k_line"
+  require_relative "binance/trade_book"
 
   # @return [Client]
   attr_accessor :client
@@ -73,13 +74,15 @@ class Peatio::Upstream::Binance
   def start!(markets)
     orderbooks = {}
     klines = {}
+    tradebooks = {}
 
     markets.each do |symbol|
       orderbooks[symbol] = Orderbook.new
       klines[symbol] = KLine.new
+      tradebooks[symbol] = TradeBook.new
     end
 
-    streams = markets.product(['depth', 'ticker'] + KLine.kline_streams)
+    streams = markets.product(['depth', 'ticker', 'trade'] + KLine.kline_streams)
       .map { |e| e.join("@") }.join("/")
 
     @stream = @client.connect_public_stream!(streams)
@@ -91,13 +94,20 @@ class Peatio::Upstream::Binance
       markets.each do |symbol|
 
         load_kline(symbol, klines[symbol]){
-          emit(:open, orderbooks, klines)
+          emit(:kline_open, klines)
+        }
+
+        load_tradebook(symbol, tradebooks[symbol]) {
+          total -= 1
+          if total == 0
+            emit(:tradebook_open, tradebooks)
+          end
         }
 
         load_orderbook(symbol, orderbooks[symbol]) {
           total -= 1
           if total == 0
-            emit(:open, orderbooks, klines)
+            emit(:orderbook_open, orderbooks)
           end
         }
       end
@@ -113,12 +123,15 @@ class Peatio::Upstream::Binance
       when "depth"
         process_depth_diff(data, symbol, orderbooks)
       when "ticker"
-        emit(:message,
-             { data: process_h24_data(data, symbol), stream: 'ticker'})
+        emit(:ticker_message,
+              process_h24_data(data, symbol))
       when -> (s) { s.include?('kline') }
         period = KLine.non_humanize_period(stream.split("_")[1])
-        emit(:message,
-             { data: process_kline_data(data["k"], symbol, period, klines[symbol]), stream: 'kline'})
+        emit(:kline_message,
+             process_kline_data(data["k"], symbol, period, klines[symbol]))
+      when 'trade'
+          emit(:trade_message,
+               process_tradebook(data, symbol))
       end
     end
 
@@ -150,6 +163,55 @@ class Peatio::Upstream::Binance
   end
 
   private
+
+  def load_tradebook(symbol, tradebook)
+    request = @client.trades_snapshot(symbol)
+
+    request.errback {
+      logger.fatal "unable to request market trades for %s" % symbol
+
+      emit(:error)
+    }
+
+    request.callback {
+      if request.response_header.status != 200
+        logger.fatal(
+            "unexpected HTTP status code from binance: " \
+          "#{request.response_header.status} #{request.response}"
+        )
+
+        emit(:error)
+
+        next
+      end
+
+      payload = JSON.parse(request.response)
+
+      logger.info "[#{symbol}] trades data loaded: " \
+                  "(#{payload.length} trades)"
+
+      payload.each do |d|
+        type = d['isBuyerMaker'] ? 'buy' : 'sell'
+        tradebook.add(d['id'], type, d['time'].to_i / 1000, d['price'] , d['qty'])
+      end
+
+      yield if block_given?
+    }
+
+  end
+
+  def process_tradebook(d, symbol)
+    type = d['m'] ? 'buy' : 'sell'
+    {symbol: symbol,
+     data: {
+         tid: d['t'],
+         type: type,
+         date: d['E'].to_i / 1000,
+         price: d['p'],
+         amount: d['q']
+     }
+    }
+  end
 
   def process_depth_diff(data, symbol, orderbooks)
     orderbook = orderbooks[symbol]

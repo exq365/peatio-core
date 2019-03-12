@@ -66,6 +66,12 @@ class Peatio::Upstream::Binance::Client
       get(query: {'symbol': symbol.upcase, 'limit': limit})
   end
 
+  # @return [EM::HttpRequest] In-flight request for retrieving trades snapshot.
+  def trades_snapshot(symbol, limit = 1000)
+    EM::HttpRequest.new(@config[:uri_rest] + "/api/v1/trades").
+        get(query: {'symbol': symbol.upcase, 'limit': limit})
+  end
+
   # @param time_in_force [String] GTC = Goot till cancel, IOC = Immediate or Cancel
   # @return [EM::HttpRequest] In-flight request for submitting order.
   def submit_order(symbol:, side:, type:, quantity:, price: nil,
