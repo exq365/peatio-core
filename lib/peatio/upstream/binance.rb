@@ -79,7 +79,7 @@ class Peatio::Upstream::Binance
       klines[symbol] = KLine.new
     end
 
-    streams = markets.product(['depth', 'miniTicker'] + KLine.kline_streams)
+    streams = markets.product(['depth', 'ticker'] + KLine.kline_streams)
       .map { |e| e.join("@") }.join("/")
 
     @stream = @client.connect_public_stream!(streams)
@@ -112,7 +112,7 @@ class Peatio::Upstream::Binance
       case stream
       when "depth"
         process_depth_diff(data, symbol, orderbooks)
-      when "miniTicker"
+      when "ticker"
         emit(:message,
              { data: process_h24_data(data, symbol), stream: 'ticker'})
       when -> (s) { s.include?('kline') }
@@ -179,7 +179,18 @@ class Peatio::Upstream::Binance
 
   def process_h24_data(data, symbol)
     { symbol: symbol,
-      data: { high: data['h'], low: data['l'], volume: data['v'], price: data['c'] } }
+      data: {
+              low:       data['l'].to_d,
+              high:      data['h'].to_d,
+              last:      data['c'].to_d,
+              volume:    data['v'].to_d,
+              open:      data['o'].to_d,
+              sell:      data['a'].to_d,
+              buy:       data['b'].to_d,
+              avg_price: data['w'].to_d,
+              price_change_percent: data['P']
+            }
+    }
   end
 
 
