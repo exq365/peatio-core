@@ -79,7 +79,7 @@ class Peatio::Upstream::Binance
       klines[symbol] = KLine.new
     end
 
-    streams = markets.product(["depth"] + KLine.kline_streams)
+    streams = markets.product(['depth', 'miniTicker'] + KLine.kline_streams)
       .map { |e| e.join("@") }.join("/")
 
     @stream = @client.connect_public_stream!(streams)
@@ -112,10 +112,13 @@ class Peatio::Upstream::Binance
       case stream
       when "depth"
         process_depth_diff(data, symbol, orderbooks)
+      when "miniTicker"
+        emit(:message,
+             { data: process_h24_data(data, symbol), stream: 'ticker'})
       when -> (s) { s.include?('kline') }
         period = KLine.non_humanize_period(stream.split("_")[1])
         emit(:message,
-             process_kline_data(data["k"], symbol, period, klines[symbol]))
+             { data: process_kline_data(data["k"], symbol, period, klines[symbol]), stream: 'kline'})
       end
     end
 
@@ -173,6 +176,12 @@ class Peatio::Upstream::Binance
       period: peroid,
       data: kline.filter(data["t"], data["o"], data["h"], data["l"], data["c"], data["v"])}
   end
+
+  def process_h24_data(data, symbol)
+    { symbol: symbol,
+      data: { high: data['h'], low: data['l'], volume: data['v'], price: data['c'] } }
+  end
+
 
   def load_kline(symbol, kline)
     KLine::AVAILABLE_POINT_PERIODS.each do |period|
