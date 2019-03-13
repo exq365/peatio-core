@@ -80,6 +80,10 @@ class Peatio::Upstream::Binance
       orderbooks[symbol] = Orderbook.new
       klines[symbol] = KLine.new
       tradebooks[symbol] = TradeBook.new
+
+      load_orderbook(symbol, orderbooks[symbol])
+      load_tradebook(symbol, tradebooks[symbol])
+      load_kline(symbol, klines[symbol])
     end
 
     streams = markets.product(['depth', 'ticker', 'trade'] + KLine.kline_streams)
@@ -89,29 +93,9 @@ class Peatio::Upstream::Binance
 
     @stream.on :open do |event|
       logger.info "public streams connected: " + streams
-
-      total = markets.length
-      markets.each do |symbol|
-
-        load_orderbook(symbol, orderbooks[symbol]) {
-          total -= 1
-          if total == 0
-            emit(:orderbook_open, orderbooks)
-          end
-        }
-
-        load_tradebook(symbol, tradebooks[symbol]) {
-          total -= 1
-          if total == 0
-            emit(:tradebook_open, tradebooks)
-          end
-        }
-
-        load_kline(symbol, klines[symbol]) {
-          emit(:kline_open, klines)
-        }
-
-      end
+      emit(:orderbook_open, orderbooks)
+      emit(:kline_open, klines)
+      emit(:tradebook_open, tradebooks)
     end
 
     @stream.on :message do |message|
@@ -295,7 +279,7 @@ class Peatio::Upstream::Binance
   end
 
   def load_orderbook(symbol, orderbook)
-    request = @client.depth_snapshot(symbol)
+    request = @client.depth_snapshot(symbol, 100)
 
     request.errback {
       logger.fatal "unable to request market depth for %s" % symbol
