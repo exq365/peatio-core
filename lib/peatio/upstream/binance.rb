@@ -93,8 +93,11 @@ class Peatio::Upstream::Binance
       total = markets.length
       markets.each do |symbol|
 
-        load_kline(symbol, klines[symbol]){
-          emit(:kline_open, klines)
+        load_orderbook(symbol, orderbooks[symbol]) {
+          total -= 1
+          if total == 0
+            emit(:orderbook_open, orderbooks)
+          end
         }
 
         load_tradebook(symbol, tradebooks[symbol]) {
@@ -104,12 +107,10 @@ class Peatio::Upstream::Binance
           end
         }
 
-        load_orderbook(symbol, orderbooks[symbol]) {
-          total -= 1
-          if total == 0
-            emit(:orderbook_open, orderbooks)
-          end
+        load_kline(symbol, klines[symbol]) {
+          emit(:kline_open, klines)
         }
+
       end
     end
 
@@ -165,7 +166,7 @@ class Peatio::Upstream::Binance
   private
 
   def load_tradebook(symbol, tradebook)
-    request = @client.trades_snapshot(symbol)
+    request = @client.trades_snapshot(symbol, 100)
 
     request.errback {
       logger.fatal "unable to request market trades for %s" % symbol
