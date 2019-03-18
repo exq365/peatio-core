@@ -4,19 +4,21 @@ class Peatio::Upstream::Binance::TradeBook
   end
 
   class Entry
-    attr_reader :tid, :type, :date, :price, :amount
+    attr_reader :tid, :type, :date, :price, :amount, :ask_id, :bid_id
 
-    def initialize(tid, type, date, price, amount)
+    def initialize(tid, type, date, price, amount, ask_id, bid_id)
       @tid = tid
       @type = type
       @date = date
       @price = price
       @amount = amount
+      @ask_id = ask_id
+      @bid_id = bid_id
     end
   end
 
-  def add(tid, type, date, price, amount)
-    @trades_history << Entry.new(tid, type, date, price, amount)
+  def add(tid, type, date, price, amount, ask_id, bid_id)
+    @trades_history << Entry.new(tid, type, date, price, amount, ask_id, bid_id)
   end
 
   def fetch(size = 100)
@@ -28,7 +30,9 @@ class Peatio::Upstream::Binance::TradeBook
           type: h.type,
           date: h.date,
           price: h.price,
-          amount: h.amount
+          amount: h.amount,
+          ask_id: h.ask_id,
+          bid_id: h.bid_id
       })
       break if history.length >= size
     end

@@ -176,8 +176,8 @@ class Peatio::Upstream::Binance
                   "(#{payload.length} trades)"
 
       payload.each do |d|
-        type = d['isBuyerMaker'] ? 'buy' : 'sell'
-        tradebook.add(d['id'], type, d['time'].to_i / 1000, d['price'] , d['qty'])
+        type = d['isBuyerMaker'] ? 'sell' : 'buy'
+        tradebook.add(d['id'], type, d['time'].to_i / 1000, d['price'] , d['qty'], d['a'], d['b'])
       end
 
       yield if block_given?
@@ -186,14 +186,16 @@ class Peatio::Upstream::Binance
   end
 
   def process_tradebook(d, symbol)
-    type = d['m'] ? 'buy' : 'sell'
+    type = d['m'] ? 'sell' : 'buy'
     {symbol: symbol,
      data: {
          tid: d['t'],
          type: type,
          date: d['E'].to_i / 1000,
          price: d['p'],
-         amount: d['q']
+         amount: d['q'],
+         ask_id: d['a'],
+         bid_id: d['b']
      }
     }
   end
@@ -230,7 +232,7 @@ class Peatio::Upstream::Binance
               low:       data['l'].to_d,
               high:      data['h'].to_d,
               last:      data['c'].to_d,
-              volume:    data['v'].to_d,
+              volume:    data['q'].to_d,
               open:      data['o'].to_d,
               sell:      data['a'].to_d,
               buy:       data['b'].to_d,
