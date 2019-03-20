@@ -1,6 +1,7 @@
 class Peatio::Upstream::Binance::TradeBook
   def initialize
     @trades_history = Array.new
+    @my_trades = Array.new
   end
 
   class Entry
@@ -40,4 +41,13 @@ class Peatio::Upstream::Binance::TradeBook
     history
   end
 
+  def add_my_trade(tid, type, date, price, amount, ask_id, bid_id)
+    @my_trades << Entry.new(tid, type, date, price, amount, ask_id, bid_id)
+                      .as_json
+                      .symbolize_keys!
+  end
+
+  def fetch_my_trades
+    @my_trades
+  end
 end

@@ -102,6 +102,18 @@ class Peatio::Upstream::Binance::Client
     ).post(head: header)
   end
 
+  def my_trades(symbol, fromId = 0)
+    query = []
+    query << ["symbol", symbol.upcase]
+    query << ["fromId", fromId]
+
+    uri = sign!(query)
+
+    EM::HttpRequest.new(
+        @config[:uri_rest] + "/api/v3/myTrades?" + uri
+    ).get(head: header)
+  end
+
   # @return [EM::HttpRequest] In-flight request for canceling order.
   def cancel_order(symbol:, id:)
     query = []
