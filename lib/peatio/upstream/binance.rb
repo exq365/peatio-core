@@ -75,13 +75,16 @@ class Peatio::Upstream::Binance
     orderbooks = {}
     klines = {}
     tradebooks = {}
+    my_trades = {}
 
     markets.each do |symbol|
       orderbooks[symbol] = Orderbook.new
       klines[symbol] = KLine.new
       tradebooks[symbol] = TradeBook.new
+      my_trades[symbol] = TradeBook.new
 
       load_orderbook(symbol, orderbooks[symbol])
+      load_my_trades(symbol, my_trades[symbol])
       load_tradebook(symbol, tradebooks[symbol])
       load_kline(symbol, klines[symbol])
     end
@@ -94,6 +97,7 @@ class Peatio::Upstream::Binance
     @stream.on :open do |event|
       logger.info "public streams connected: " + streams
       emit(:orderbook_open, orderbooks)
+      emit(:my_trades_open, my_trades)
       emit(:kline_open, klines)
       emit(:tradebook_open, tradebooks)
     end
@@ -242,6 +246,40 @@ class Peatio::Upstream::Binance
     }
   end
 
+  def load_my_trades(symbol, my_trade)
+    request = @client.my_trades(symbol)
+
+    request.errback {
+      logger.fatal "unable to request market trades for %s" % symbol
+
+      emit(:error)
+    }
+
+    request.callback {
+      if request.response_header.status != 200
+        logger.fatal(
+            "unexpected HTTP status code from binance: " \
+        "#{request.response_header.status} #{request.response}"
+        )
+
+        emit(:error)
+
+        next
+      end
+
+      payload = JSON.parse(request.response)
+
+      logger.info "[#{symbol}] my trades data loaded: " \
+                "(#{payload.length} data)"
+
+      payload.each do |d|
+        type, ask_id, bid_id = d['isBuyer'] ? ['sell', d['orderId'], nil] : ['buy', nil, d['orderId']]
+        my_trade.add_my_trade(d['id'], type, d['time'].to_i / 1000, d['price'] , d['qty'], ask_id, bid_id)
+      end
+
+      yield if block_given?
+    }
+  end
 
   def load_kline(symbol, kline)
     KLine::AVAILABLE_POINT_PERIODS.each do |period|
