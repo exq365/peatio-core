@@ -17,10 +17,10 @@ class Peatio::Upstream::Binance::Client
 
   attr_accessor :config
 
-  def initialize
+  def initialize(api_key, api_secret)
     @config = {
-      api_key: ENV["UPSTREAM_BINANCE_API_KEY"] || "",
-      secret_key: ENV["UPSTREAM_BINANCE_API_SECRET"] || "",
+      api_key: api_key || "",
+      secret_key: api_secret || "",
       uri_rest: ENV["UPSTREAM_BINANCE_URI_REST"] || @@uri_rest,
       uri_ws: ENV["UPSTREAM_BINANCE_URI_WS"] || @@uri_ws,
     }

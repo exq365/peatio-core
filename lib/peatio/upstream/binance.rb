@@ -39,8 +39,8 @@ class Peatio::Upstream::Binance
   #
   # @see Client
   # @see Trader
-  def initialize
-    @client = Client.new
+  def initialize(api_key, api_secret)
+    @client = Client.new(api_key, api_secret)
     @trader = Trader.new(@client)
   end
 
