@@ -110,7 +110,8 @@ class Peatio::Upstream::Binance
 
       case stream
       when "depth"
-        process_depth_diff(data, symbol, orderbooks)
+        emit(:orderbook_message,
+             process_depth_diff(data, symbol, orderbooks))
       when "ticker"
         emit(:ticker_message,
               process_h24_data(data, symbol))
@@ -222,6 +223,8 @@ class Peatio::Upstream::Binance
         bids,
         orderbook.max_bid,
       ]
+    asks, bids = orderbook.depth(30)
+    { symbol: symbol, asks: asks, bids: bids }
   end
 
   def process_kline_data(data, symbol, peroid, kline)
@@ -319,7 +322,7 @@ class Peatio::Upstream::Binance
   end
 
   def load_orderbook(symbol, orderbook)
-    request = @client.depth_snapshot(symbol, 100)
+    request = @client.depth_snapshot(symbol, 50)
 
     request.errback {
       logger.fatal "unable to request market depth for %s" % symbol
