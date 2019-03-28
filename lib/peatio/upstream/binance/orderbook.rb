@@ -40,12 +40,12 @@ class Peatio::Upstream::Binance::Orderbook
     bids = []
 
     @asks.each { |price, entry|
-      asks << [price, entry.volume]
+      asks << [price.to_d, entry.volume.to_d]
       break if asks.length >= max_depth
     }
 
     @bids.reverse_each { |price, entry|
-      bids << [price, entry.volume]
+      bids << [price.to_d, entry.volume.to_d]
       break if bids.length >= max_depth
     }
 
