@@ -42,16 +42,20 @@ class Peatio::Upstream::Binance::Trader
     # Price order was created with, can be zero.
     attr_accessor :price
 
+    # Order ID.
+    attr_accessor :id
+
     # @!visibility protected
     attr_accessor :timer
 
     # @!visibility protected
-    def initialize(symbol, type, side, quantity, price)
+    def initialize(symbol, type, side, quantity, price, id=nil)
       @symbol = symbol
       @type = type
       @side = side
       @quantity = quantity
       @price = price
+      @id = id
     end
   end
 
@@ -138,6 +142,32 @@ class Peatio::Upstream::Binance::Trader
     order
   end
 
+  def cancel_order(symbol:, type:, side:, quantity:, price:, id:)
+
+    order = Order.new(symbol, type, side, quantity, price, id)
+    @client.connect_private_stream! { |stream|
+      stream.on :error do |message|
+        logger.error "error while listening for private stream: #{message}"
+      end
+
+      stream.on :open do |event|
+        submit_cancel_order(order)
+      end
+
+      stream.on :message do |message|
+        payload = JSON.parse(message.data)
+        event = payload["e"]
+
+        case event
+        when "executionReport"
+          process_execution_report(payload, order, stream)
+        end
+      end
+    }
+
+    order
+  end
+
   protected
 
   def initialize(client)
@@ -189,26 +219,31 @@ class Peatio::Upstream::Binance::Trader
 
         @open_orders[id] = order
 
-        if timeout > 0
-          order.timer = EM::add_timer(timeout) {
-            logger.info "[#{order.symbol.downcase}] ##{id} cancelling order: " \
-                        "timeout expired: #{timeout} seconds"
-
-            request = @client.cancel_order(symbol: order.symbol, id: id)
-
-            request.errback {
-              order.emit(:error, request)
-              stream.close
-            }
-
-            request.callback {
-              @open_orders.delete(id)
-              order.emit(:canceled)
-            }
-          }
-        end
-
         order.emit(:submitted, id)
+      end
+    }
+  end
+
+  def submit_cancel_order(order)
+    logger.info "[#{order.symbol.downcase}] Canceling order: #{order.id}"
+
+    request = @client.cancel_order(
+        symbol: order.symbol,
+        id: order.id
+    )
+
+    request.errback {
+      order.emit(:error, request)
+    }
+
+    request.callback {
+      if request.response_header.status >= 300
+        order.emit(:error, request)
+      else
+        payload = JSON.parse(request.response)
+
+        order.emit(:submitted, payload)
+
       end
     }
   end

@@ -1,3 +1,4 @@
+# encoding: UTF-8
 # frozen_string_literal: true
 
 module Peatio::Auth
@@ -10,10 +11,9 @@ module Peatio::Auth
 
     def initialize(reason = nil)
       @reason = reason
-
       super(
         code: 2001,
-        text: "Authorization failed".tap { |t| t << ": #{reason}" if reason },
+        text: reason ? "Authorization failed: #{reason}" : "Authorization failed",
       )
     end
   end

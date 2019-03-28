@@ -17,10 +17,10 @@ class Peatio::Upstream::Binance::Client
 
   attr_accessor :config
 
-  def initialize
+  def initialize(api_key, api_secret)
     @config = {
-      api_key: ENV["UPSTREAM_BINANCE_API_KEY"] || "",
-      secret_key: ENV["UPSTREAM_BINANCE_API_SECRET"] || "",
+      api_key: api_key || "",
+      secret_key: api_secret || "",
       uri_rest: ENV["UPSTREAM_BINANCE_URI_REST"] || @@uri_rest,
       uri_ws: ENV["UPSTREAM_BINANCE_URI_WS"] || @@uri_ws,
     }
@@ -66,6 +66,12 @@ class Peatio::Upstream::Binance::Client
       get(query: {'symbol': symbol.upcase, 'limit': limit})
   end
 
+  # @return [EM::HttpRequest] In-flight request for retrieving trades snapshot.
+  def trades_snapshot(symbol, limit = 1000)
+    EM::HttpRequest.new(@config[:uri_rest] + "/api/v1/trades").
+        get(query: {'symbol': symbol.upcase, 'limit': limit})
+  end
+
   # @param time_in_force [String] GTC = Goot till cancel, IOC = Immediate or Cancel
   # @return [EM::HttpRequest] In-flight request for submitting order.
   def submit_order(symbol:, side:, type:, quantity:, price: nil,
@@ -96,6 +102,18 @@ class Peatio::Upstream::Binance::Client
     ).post(head: header)
   end
 
+  def my_trades(symbol, fromId = 0)
+    query = []
+    query << ["symbol", symbol.upcase]
+    query << ["fromId", fromId]
+
+    uri = sign!(query)
+
+    EM::HttpRequest.new(
+        @config[:uri_rest] + "/api/v3/myTrades?" + uri
+    ).get(head: header)
+  end
+
   # @return [EM::HttpRequest] In-flight request for canceling order.
   def cancel_order(symbol:, id:)
     query = []
@@ -107,6 +125,11 @@ class Peatio::Upstream::Binance::Client
     EM::HttpRequest.new(
       @config[:uri_rest] + "/api/v3/order?" + uri
     ).delete(head: header)
+  end
+
+  def kline_data(symbol, period)
+    EM::HttpRequest.new(@config[:uri_rest] + "/api/v1/klines").
+        get(query: {'symbol': symbol.upcase, 'interval': period, 'limit': 1000})
   end
 
   private
