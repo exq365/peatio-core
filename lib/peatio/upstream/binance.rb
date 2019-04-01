@@ -140,6 +140,10 @@ class Peatio::Upstream::Binance
     @stream.close
   end
 
+  def get_exchange_symbols
+    @client.get_exchange_symbols
+  end
+
   protected
 
   def self.logger

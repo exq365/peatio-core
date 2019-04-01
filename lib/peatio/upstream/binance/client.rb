@@ -11,7 +11,7 @@
 # Client intended for internal use and should not be used for working with
 # Binance directly.
 class Peatio::Upstream::Binance::Client
-  @@uri_rest = "https://www.binance.com"
+  @@uri_rest = "https://api.binance.com"
   @@uri_ws = "wss://stream.binance.com:9443"
   @@keepalive_interval = 600
 
@@ -130,6 +130,14 @@ class Peatio::Upstream::Binance::Client
   def kline_data(symbol, period)
     EM::HttpRequest.new(@config[:uri_rest] + "/api/v1/klines").
         get(query: {'symbol': symbol.upcase, 'interval': period, 'limit': 1000})
+  end
+
+  def get_exchange_symbols
+    uri = URI.parse(@config[:uri_rest] + '/api/v1/exchangeInfo')
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    res = http.get(uri.request_uri)
+    res.code == '200' ? JSON.parse(res.body).fetch('symbols').map{|s| s['symbol']} : []
   end
 
   private
